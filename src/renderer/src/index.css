@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 5px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
+}
+
+/* Custom range input slider for Spotify-like scrubber and volume */
+input[type="range"] {
+  -webkit-appearance: none;
+  background: #4f4f4f;
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out, transform 0.1s ease-in-out;
+}
+
+.range-group:hover input[type="range"]::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+.range-group:hover input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.range-group:hover input[type="range"] {
+  accent-color: #1ed760;
+}

@@ -1,0 +1,77 @@
+{
+  "name": "spotifly",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/main/main.js",
+  "scripts": {
+    "dev:renderer": "vite",
+    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "dev": "concurrently -k \"npm run dev:renderer\" \"wait-on tcp:5173 && npm run dev:electron\"",
+    "build:renderer": "vite build",
+    "build:exe": "npm run build:renderer && electron-builder --win nsis",
+    "build:portable": "npm run build:renderer && electron-builder --win portable",
+    "build:dir": "npm run build:renderer && electron-builder --win --dir",
+    "start": "electron ."
+  },
+  "build": {
+    "appId": "com.spotifly.app",
+    "productName": "Spotifly",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/main/**/*",
+      "dist/renderer/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Spotifly"
+    }
+  },
+  "description": "Offline Music Player with In-App YouTube Search and Downloader",
+  "keywords": [],
+  "author": "Spotifly",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "lucide-react": "^1.49.0",
+    "music-metadata": "^11.16.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "yt-search": "^2.13.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.1",
+    "wait-on": "^9.5.1"
+  }
+}
