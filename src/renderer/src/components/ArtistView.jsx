@@ -10,13 +10,22 @@ import {
   Zap,
   XCircle,
   UserCheck,
+  Play,
+  Pause,
+  Radio,
 } from 'lucide-react';
+import { PlaylistPickerButton } from './PlaylistPicker';
+import { useAudio } from '../context/AudioContext';
+import { sameTrack } from '../utils/tracks';
 
 export default function ArtistView({
   artistName,
   onDownload,
   onCancelDownload,
   onOpenSongPage,
+  playlists = [],
+  onAddToPlaylist,
+  onCreatePlaylist,
   downloadStatuses = {},
   isDownloaded,
 }) {
@@ -24,6 +33,7 @@ export default function ArtistView({
   const [tracks, setTracks] = useState([]);
   const [banner, setBanner] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
 
   useEffect(() => {
     let active = true;
@@ -151,10 +161,13 @@ export default function ArtistView({
               const alreadyDownloaded = isDownloaded(track);
               const isDownloading = status && status.status === 'downloading';
               const isSelected = selectedIds.has(track.id);
+              const isCurrent = currentTrack && sameTrack(currentTrack, track);
+              const playingThis = isCurrent && isPlaying;
 
               return (
                 <div
                   key={track.id}
+                  onDoubleClick={() => (isCurrent ? togglePlay() : playTrack(track, tracks, idx))}
                   className={`flex items-center justify-between p-2.5 rounded-md hover:bg-[#282828] transition-colors group ${
                     isSelected ? 'bg-[#252525]' : ''
                   }`}
@@ -208,7 +221,15 @@ export default function ArtistView({
                   </div>
 
                   {/* Download Controls */}
-                  <div className="flex items-center gap-3 shrink-0 ml-4">
+                  <div className="flex items-center gap-2 shrink-0 ml-4">
+                    <PlaylistPickerButton
+                      track={track}
+                      playlists={playlists}
+                      onAddToPlaylist={onAddToPlaylist}
+                      onCreatePlaylist={onCreatePlaylist}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    />
+
                     {alreadyDownloaded ? (
                       <div className="flex items-center gap-1.5 text-xs text-[#1ed760] font-medium bg-[#1ed760]/10 px-3 py-1.5 rounded-full border border-[#1ed760]/30">
                         <CheckCircle size={14} />
@@ -243,6 +264,14 @@ export default function ArtistView({
                         <span>Download</span>
                       </button>
                     )}
+
+                    <button
+                      onClick={() => (isCurrent ? togglePlay() : playTrack(track, tracks, idx))}
+                      title={playingThis ? 'Pause' : 'Play online'}
+                      className="flex items-center gap-1.5 bg-[#2a2a2a] hover:bg-[#1ed760] hover:text-black text-white px-2.5 py-1.5 rounded-full text-xs font-semibold transition-all border border-[#3e3e3e]"
+                    >
+                      {playingThis ? <Pause size={14} fill="currentColor" /> : <Radio size={14} />}
+                    </button>
                   </div>
                 </div>
               );

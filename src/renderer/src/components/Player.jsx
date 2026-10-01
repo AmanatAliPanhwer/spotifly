@@ -10,20 +10,20 @@ import {
   VolumeX,
   Heart,
   Music,
+  Loader2,
+  AlertTriangle,
+  Download,
+  Radio,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
+import { isLocal, sameTrack, formatDuration } from '../utils/tracks';
 
-function formatTime(seconds) {
-  if (isNaN(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
-
-export default function Player({ favorites = [], onToggleFavorite, onOpenSongPage, onOpenArtistPage }) {
+export default function Player({ favorites = [], onToggleFavorite, onOpenSongPage, onOpenArtistPage, onDownload }) {
   const {
     currentTrack,
     isPlaying,
+    isBuffering,
+    playbackError,
     currentTime,
     duration,
     volume,
@@ -43,9 +43,11 @@ export default function Player({ favorites = [], onToggleFavorite, onOpenSongPag
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekTime, setSeekTime] = useState(0);
 
-  const isFavorited = currentTrack && favorites.some((f) => (f.filePath || f.id) === (currentTrack.filePath || currentTrack.id));
+  const isFavorited = currentTrack && favorites.some((f) => sameTrack(f, currentTrack));
 
   const progressPercent = duration > 0 ? ((isSeeking ? seekTime : currentTime) / duration) * 100 : 0;
+
+  const online = currentTrack && !isLocal(currentTrack);
 
   return (
     <footer className="h-20 bg-[#000000] border-t border-[#282828] px-4 flex items-center justify-between select-none z-50">
@@ -78,6 +80,29 @@ export default function Player({ favorites = [], onToggleFavorite, onOpenSongPag
               >
                 {currentTrack.artist || 'Unknown Artist'}
               </span>
+              {online && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-[#1ed760] uppercase tracking-wide mt-0.5">
+                  {isBuffering ? (
+                    <>
+                      <Loader2 size={10} className="animate-spin" /> Buffering stream
+                    </>
+                  ) : playbackError ? (
+                    <span className="text-[#e8115b] normal-case tracking-normal truncate">Unavailable</span>
+                  ) : (
+                    <>
+                      <Radio size={10} /> Online stream
+                    </>
+                  )}
+                </span>
+              )}
+              {playbackError && online && onDownload && (
+                <button
+                  onClick={() => onDownload(currentTrack)}
+                  className="flex items-center gap-1 text-[10px] font-bold text-[#e8115b] hover:text-white transition-colors mt-0.5"
+                >
+                  <AlertTriangle size={10} /> Download instead
+                </button>
+              )}
             </div>
             <button
               onClick={() => onToggleFavorite(currentTrack)}
@@ -152,7 +177,7 @@ export default function Player({ favorites = [], onToggleFavorite, onOpenSongPag
 
         {/* Scrubber */}
         <div className="flex items-center gap-2 w-full text-xs text-[#a7a7a7] range-group">
-          <span className="w-10 text-right">{formatTime(isSeeking ? seekTime : currentTime)}</span>
+          <span className="w-10 text-right">{formatDuration(isSeeking ? seekTime : currentTime)}</span>
           <div className="relative flex-1 flex items-center h-4">
             <input
               type="range"
@@ -172,7 +197,7 @@ export default function Player({ favorites = [], onToggleFavorite, onOpenSongPag
               }}
             />
           </div>
-          <span className="w-10">{formatTime(duration)}</span>
+          <span className="w-10">{formatDuration(duration)}</span>
         </div>
       </div>
 

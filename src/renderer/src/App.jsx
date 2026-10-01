@@ -5,20 +5,26 @@ import SearchView from './components/SearchView';
 import TrackList from './components/TrackList';
 import ArtistView from './components/ArtistView';
 import SongView from './components/SongView';
+import AlbumsView from './components/AlbumsView';
+import AlbumView from './components/AlbumView';
 import { useAudio } from './context/AudioContext';
-import { Heart, Download, Music2, Sparkles, FolderOpen, Play } from 'lucide-react';
+import { useDialog } from './context/DialogContext';
+import { Heart, Download, Music2, Sparkles, Play, Disc3 } from 'lucide-react';
+import { groupAlbums, sameTrack, isLocal } from './utils/tracks';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('home'); // 'home' | 'search' | 'library' | 'favorites' | 'artist' | 'song' | 'playlist:id'
+  const [currentView, setCurrentView] = useState('home'); // 'home' | 'search' | 'library' | 'favorites' | 'albums' | 'artist' | 'song' | 'playlist:id' | 'album:key'
   const [selectedArtist, setSelectedArtist] = useState('');
   const [selectedSongTrack, setSelectedSongTrack] = useState(null);
+  const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [libraryTracks, setLibraryTracks] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [playlists, setPlaylists] = useState([]);
   const [downloadStatuses, setDownloadStatuses] = useState({});
+  const [isRefreshingMetadata, setIsRefreshingMetadata] = useState(false);
   const { playTrack } = useAudio();
+  const dialog = useDialog();
 
-  // Load local library and user data on start
   const refreshLibrary = async () => {
     try {
       const tracks = await window.api.getLocalLibrary();
@@ -44,7 +50,6 @@ export default function App() {
     refreshLibrary();
     loadUserData();
 
-    // Listen to download progress events
     const unsub = window.api.onDownloadProgress((data) => {
       setDownloadStatuses((prev) => ({
         ...prev,
@@ -66,67 +71,113 @@ export default function App() {
     });
   };
 
-  // Toggle favorite
+  // ---------- Favorites ----------
+
   const handleToggleFavorite = (track) => {
-    const exists = favorites.some((f) => (f.filePath || f.id) === (track.filePath || track.id));
-    let newFavs;
-    if (exists) {
-      newFavs = favorites.filter((f) => (f.filePath || f.id) !== (track.filePath || track.id));
-    } else {
-      newFavs = [track, ...favorites];
-    }
+    const exists = favorites.some((f) => sameTrack(f, track));
+    const newFavs = exists
+      ? favorites.filter((f) => !sameTrack(f, track))
+      : [track, ...favorites];
     setFavorites(newFavs);
     saveUserData(newFavs, playlists);
   };
 
-  // Create playlist
-  const handleCreatePlaylist = () => {
-    const name = prompt('Enter playlist name:');
-    if (!name || !name.trim()) return;
-    const newPlaylist = {
-      id: Date.now().toString(),
-      name: name.trim(),
-      tracks: [],
-    };
+  // ---------- Playlists ----------
+
+  const createPlaylist = (name) => {
+    const newPlaylist = { id: Date.now().toString(), name: name.trim(), tracks: [] };
     const newPlaylists = [...playlists, newPlaylist];
     setPlaylists(newPlaylists);
     saveUserData(favorites, newPlaylists);
-    setCurrentView(`playlist:${newPlaylist.id}`);
+    return newPlaylist;
   };
 
-  // Add track to playlist
+  const handleCreatePlaylist = async () => {
+    const name = await dialog.prompt('Create playlist', 'e.g. Road trip, Focus, Chill');
+    if (!name) return;
+    const pl = createPlaylist(name);
+    setCurrentView(`playlist:${pl.id}`);
+  };
+
   const handleAddToPlaylist = (playlistId, track) => {
     const newPlaylists = playlists.map((pl) => {
-      if (pl.id === playlistId) {
-        const alreadyIn = pl.tracks.some((t) => (t.filePath || t.id) === (track.filePath || track.id));
-        if (alreadyIn) return pl;
-        return { ...pl, tracks: [...pl.tracks, track] };
-      }
-      return pl;
+      if (pl.id !== playlistId) return pl;
+      if (pl.tracks.some((t) => sameTrack(t, track))) return pl;
+      return { ...pl, tracks: [...pl.tracks, track] };
     });
     setPlaylists(newPlaylists);
     saveUserData(favorites, newPlaylists);
   };
 
-  // Delete track from storage
+  const handleRemoveFromPlaylist = (playlistId, track) => {
+    const newPlaylists = playlists.map((pl) =>
+      pl.id === playlistId ? { ...pl, tracks: pl.tracks.filter((t) => !sameTrack(t, track)) } : pl
+    );
+    setPlaylists(newPlaylists);
+    saveUserData(favorites, newPlaylists);
+  };
+
+  const handleMovePlaylistTrack = (playlistId, from, to) => {
+    if (from === to) return;
+    const newPlaylists = playlists.map((pl) => {
+      if (pl.id !== playlistId) return pl;
+      const tracks = [...pl.tracks];
+      if (to < 0 || to >= tracks.length) return pl;
+      const [moved] = tracks.splice(from, 1);
+      tracks.splice(to, 0, moved);
+      return { ...pl, tracks };
+    });
+    setPlaylists(newPlaylists);
+    saveUserData(favorites, newPlaylists);
+  };
+
+  const handleRenamePlaylist = (playlistId, name) => {
+    const newPlaylists = playlists.map((pl) =>
+      pl.id === playlistId ? { ...pl, name: name.trim() } : pl
+    );
+    setPlaylists(newPlaylists);
+    saveUserData(favorites, newPlaylists);
+  };
+
+  const handleDeletePlaylist = (playlistId) => {
+    const newPlaylists = playlists.filter((pl) => pl.id !== playlistId);
+    setPlaylists(newPlaylists);
+    saveUserData(favorites, newPlaylists);
+    if (currentView === `playlist:${playlistId}`) setCurrentView('home');
+  };
+
+  // ---------- Deletion ----------
+
   const handleDeleteTrack = async (filePath) => {
     const res = await window.api.deleteTrack(filePath);
     if (res.success) {
       refreshLibrary();
-      // Remove from favorites if present
+
       const newFavs = favorites.filter((f) => f.filePath !== filePath);
-      setFavorites(newFavs);
-      // Remove from playlists
       const newPlaylists = playlists.map((pl) => ({
         ...pl,
         tracks: pl.tracks.filter((t) => t.filePath !== filePath),
       }));
+      setFavorites(newFavs);
       setPlaylists(newPlaylists);
       saveUserData(newFavs, newPlaylists);
+
+      if (selectedAlbum) {
+        setSelectedAlbum((prev) => {
+          if (!prev) return prev;
+          const remaining = prev.tracks.filter((t) => t.filePath !== filePath);
+          if (remaining.length === 0) {
+            setCurrentView('albums');
+            return null;
+          }
+          return { ...prev, tracks: remaining };
+        });
+      }
     }
   };
 
-  // In-App Download handler
+  // ---------- Downloads ----------
+
   const handleDownloadTrack = async (track) => {
     setDownloadStatuses((prev) => ({
       ...prev,
@@ -138,15 +189,14 @@ export default function App() {
       refreshLibrary();
     } catch (err) {
       console.error('Download error:', err);
-      alert('Download error: ' + err.message);
       setDownloadStatuses((prev) => ({
         ...prev,
         [track.id]: { id: track.id, percent: 0, status: 'error' },
       }));
+      dialog.alert('Download failed', err.message || 'The download could not be completed.');
     }
   };
 
-  // Cancel download handler
   const handleCancelDownload = async (id) => {
     try {
       await window.api.cancelDownload(id);
@@ -160,24 +210,52 @@ export default function App() {
   };
 
   const isTrackDownloaded = (track) => {
+    if (!track || isLocal(track)) return true;
     return libraryTracks.some(
-      (lib) => lib.filename.includes(track.id) || (lib.title === track.title && lib.artist === track.artist)
+      (lib) => (track.ytId && lib.ytId === track.ytId) || lib.filename.includes(track.id)
     );
   };
 
-  // Open artist page
+  // ---------- Navigation ----------
+
   const handleOpenArtistPage = (artistName) => {
     setSelectedArtist(artistName);
     setCurrentView('artist');
   };
 
-  // Open song page
   const handleOpenSongPage = (track) => {
     setSelectedSongTrack(track);
     setCurrentView('song');
   };
 
-  // Determine current main view
+  const handleOpenAlbum = (album) => {
+    setSelectedAlbum(album);
+    setCurrentView(`album:${album.key}`);
+  };
+
+  // Older downloads only have the info yt-dlp scraped at download time; ask the
+  // main process to re-probe anything missing an album so existing libraries get
+  // real albums too, then re-read the library and resync the open album page.
+  const handleRefreshAlbumMetadata = async () => {
+    if (isRefreshingMetadata) return;
+    setIsRefreshingMetadata(true);
+    try {
+      const result = await window.api.refreshMetadata();
+      const tracks = await window.api.getLocalLibrary();
+      setLibraryTracks(tracks);
+      if (selectedAlbum) {
+        const regrouped = groupAlbums(tracks);
+        setSelectedAlbum(regrouped.find((a) => a.key === selectedAlbum.key) || null);
+        if (!regrouped.some((a) => a.key === selectedAlbum.key)) setCurrentView('albums');
+      }
+      return result;
+    } finally {
+      setIsRefreshingMetadata(false);
+    }
+  };
+
+  // ---------- Views ----------
+
   const renderMainView = () => {
     if (currentView === 'search') {
       return (
@@ -186,6 +264,11 @@ export default function App() {
           onCancelDownload={handleCancelDownload}
           onOpenArtistPage={handleOpenArtistPage}
           onOpenSongPage={handleOpenSongPage}
+          onOpenAlbum={handleOpenAlbum}
+          onPlayTrack={playTrack}
+          playlists={playlists}
+          onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
           downloadStatuses={downloadStatuses}
           isDownloaded={isTrackDownloaded}
         />
@@ -199,6 +282,10 @@ export default function App() {
           onDownload={handleDownloadTrack}
           onCancelDownload={handleCancelDownload}
           onOpenSongPage={handleOpenSongPage}
+          onPlayTrack={playTrack}
+          playlists={playlists}
+          onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
           downloadStatuses={downloadStatuses}
           isDownloaded={isTrackDownloaded}
         />
@@ -213,8 +300,39 @@ export default function App() {
           onCancelDownload={handleCancelDownload}
           onOpenArtistPage={handleOpenArtistPage}
           onOpenSongPage={handleOpenSongPage}
+          onPlayTrack={playTrack}
+          playlists={playlists}
+          onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
           downloadStatuses={downloadStatuses}
           isDownloaded={isTrackDownloaded}
+        />
+      );
+    }
+
+    if (currentView === 'albums') {
+      return (
+        <AlbumsView
+          tracks={libraryTracks}
+          onOpenAlbum={handleOpenAlbum}
+          onRefreshMetadata={handleRefreshAlbumMetadata}
+          isRefreshing={isRefreshingMetadata}
+        />
+      );
+    }
+
+    if (currentView.startsWith('album:') && selectedAlbum) {
+      return (
+        <AlbumView
+          album={selectedAlbum}
+          onOpenArtistPage={handleOpenArtistPage}
+          onDownload={handleDownloadTrack}
+          onCancelDownload={handleCancelDownload}
+          downloadStatuses={downloadStatuses}
+          isDownloaded={isTrackDownloaded}
+          playlists={playlists}
+          onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
         />
       );
     }
@@ -233,6 +351,7 @@ export default function App() {
           onOpenFolder={() => window.api.openMusicFolder()}
           playlists={playlists}
           onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
           onOpenArtistPage={handleOpenArtistPage}
           onOpenSongPage={handleOpenSongPage}
         />
@@ -249,9 +368,9 @@ export default function App() {
           tracks={favorites}
           favorites={favorites}
           onToggleFavorite={handleToggleFavorite}
-          onDeleteTrack={handleDeleteTrack}
           playlists={playlists}
           onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
           onOpenArtistPage={handleOpenArtistPage}
           onOpenSongPage={handleOpenSongPage}
         />
@@ -271,6 +390,11 @@ export default function App() {
           onToggleFavorite={handleToggleFavorite}
           playlists={playlists}
           onAddToPlaylist={handleAddToPlaylist}
+          onCreatePlaylist={createPlaylist}
+          onRemoveFromPlaylist={(track) => handleRemoveFromPlaylist(pl.id, track)}
+          onMovePlaylistTrack={(from, to) => handleMovePlaylistTrack(pl.id, from, to)}
+          onRenamePlaylist={(name) => handleRenamePlaylist(pl.id, name)}
+          onDeletePlaylist={() => handleDeletePlaylist(pl.id)}
           onOpenArtistPage={handleOpenArtistPage}
           onOpenSongPage={handleOpenSongPage}
         />
@@ -280,7 +404,6 @@ export default function App() {
     // Default 'home' view
     return (
       <div className="flex-1 overflow-y-auto p-8 bg-gradient-to-b from-[#202020] to-[#121212] flex flex-col gap-8">
-        {/* Welcome Banner */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Good evening</h1>
@@ -326,15 +449,15 @@ export default function App() {
           </div>
 
           <div
-            onClick={() => setCurrentView('search')}
+            onClick={() => setCurrentView('albums')}
             className="flex items-center bg-[#2b2b2b]/60 hover:bg-[#383838] transition-colors rounded-md overflow-hidden cursor-pointer group shadow"
           >
-            <div className="w-16 h-16 bg-[#333333] flex items-center justify-center text-[#1ed760] shrink-0">
-              <Music2 size={24} />
+            <div className="w-16 h-16 bg-gradient-to-br from-[#4a3a6b] to-[#c4b5fd] flex items-center justify-center text-white shrink-0">
+              <Disc3 size={24} />
             </div>
             <div className="flex-1 px-4 flex items-center justify-between">
-              <span className="font-bold text-sm text-white">Explore & Download</span>
-              <span className="text-xs text-[#a7a7a7]">In-App Search</span>
+              <span className="font-bold text-sm text-white">Albums</span>
+              <span className="text-xs text-[#a7a7a7]">From your library</span>
             </div>
           </div>
         </div>
@@ -408,7 +531,6 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-black">
-      {/* Draggable Title Bar / Header */}
       <div
         className="h-9 bg-[#000000] flex items-center px-4 justify-between border-b border-[#181818] select-none text-xs text-[#727272]"
         style={{ WebkitAppRegion: 'drag' }}
@@ -417,7 +539,6 @@ export default function App() {
         <span className="text-[11px] bg-[#181818] px-2 py-0.5 rounded text-[#727272]">Offline Mode Ready</span>
       </div>
 
-      {/* Main Layout Body */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar
           currentView={currentView}
@@ -426,16 +547,17 @@ export default function App() {
           onCreatePlaylist={handleCreatePlaylist}
           onOpenFolder={() => window.api.openMusicFolder()}
           downloadCount={libraryTracks.length}
+          albumCount={groupAlbums(libraryTracks).length}
         />
         {renderMainView()}
       </div>
 
-      {/* Spotify Bottom Audio Controller */}
       <Player
         favorites={favorites}
         onToggleFavorite={handleToggleFavorite}
         onOpenSongPage={handleOpenSongPage}
         onOpenArtistPage={handleOpenArtistPage}
+        onDownload={handleDownloadTrack}
       />
     </div>
   );

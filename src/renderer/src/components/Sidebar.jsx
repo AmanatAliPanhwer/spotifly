@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Search, Library, Plus, Heart, Music, FolderOpen, Download } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, Music, FolderOpen, Download, Disc3 } from 'lucide-react';
 
 export default function Sidebar({
   currentView,
@@ -8,6 +8,7 @@ export default function Sidebar({
   onCreatePlaylist,
   onOpenFolder,
   downloadCount = 0,
+  albumCount = 0,
 }) {
   return (
     <aside className="w-64 bg-[#000000] flex flex-col gap-2 p-2 select-none h-full text-[#b3b3b3]">
@@ -67,6 +68,21 @@ export default function Sidebar({
 
         {/* Quick Collections */}
         <div className="flex flex-col gap-1 overflow-y-auto flex-1 pr-1">
+          <button
+            onClick={() => setCurrentView('albums')}
+            className={`flex items-center gap-3 p-2 rounded-md transition-colors text-left ${
+              currentView === 'albums' ? 'bg-[#282828] text-white' : 'hover:bg-[#1a1a1a] hover:text-white'
+            }`}
+          >
+            <div className="w-10 h-10 rounded bg-gradient-to-br from-[#4a3a6b] to-[#c4b5fd] flex items-center justify-center text-white shrink-0">
+              <Disc3 size={18} />
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-sm font-semibold truncate text-white">Albums</p>
+              <p className="text-xs text-[#a7a7a7]">{albumCount} from library</p>
+            </div>
+          </button>
+
           <button
             onClick={() => setCurrentView('favorites')}
             className={`flex items-center gap-3 p-2 rounded-md transition-colors text-left ${

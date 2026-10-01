@@ -8,23 +8,24 @@ import {
   Music,
   FolderOpen,
   Search,
-  Plus,
-  ListPlus,
+  Pencil,
+  ListX,
+  ChevronUp,
+  ChevronDown,
+  Download,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
-
-function formatDuration(sec) {
-  if (!sec || isNaN(sec)) return '0:00';
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s < 10 ? '0' : ''}${s}`;
-}
+import { PlaylistPickerButton } from './PlaylistPicker';
+import { useDialog } from '../context/DialogContext';
+import { sameTrack, trackKey, isLocal, formatDuration } from '../utils/tracks';
 
 export default function TrackList({
   title,
   subtitle,
   icon: HeaderIcon,
   headerBg = 'from-[#1e3264] to-[#121212]',
+  headerLabel = 'Playlist',
+  coverImage,
   tracks = [],
   favorites = [],
   onToggleFavorite,
@@ -32,12 +33,20 @@ export default function TrackList({
   onOpenFolder,
   playlists = [],
   onAddToPlaylist,
+  onCreatePlaylist,
+  onRemoveFromPlaylist,
+  onMovePlaylistTrack,
+  onRenamePlaylist,
+  onDeletePlaylist,
+  onDownload,
+  downloadStatuses = {},
   onOpenArtistPage,
   onOpenSongPage,
+  readOnly = false,
 }) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const dialog = useDialog();
   const [filterQuery, setFilterQuery] = useState('');
-  const [playlistMenuTrack, setPlaylistMenuTrack] = useState(null);
 
   const filteredTracks = tracks.filter((t) => {
     if (!filterQuery) return true;
@@ -49,44 +58,70 @@ export default function TrackList({
     );
   });
 
+  const listPlaying =
+    isPlaying && currentTrack && filteredTracks.some((t) => sameTrack(t, currentTrack));
+
+  const handleDelete = async (track) => {
+    const ok = await dialog.confirm('Delete from offline storage?', `"${track.title}" will be permanently removed from your device. This cannot be undone.`, {
+      confirmText: 'Delete',
+      variant: 'danger',
+    });
+    if (ok) onDeleteTrack?.(track.filePath);
+  };
+
+  const handleRename = async () => {
+    const name = await dialog.prompt('Rename playlist', title, {
+      inputValue: title,
+      confirmText: 'Rename',
+    });
+    if (name) onRenamePlaylist?.(name);
+  };
+
+  const handleDeletePlaylist = async () => {
+    const ok = await dialog.confirm('Delete playlist?', `"${title}" will be removed. The audio files themselves stay in your library.`, {
+      confirmText: 'Delete playlist',
+      variant: 'danger',
+    });
+    if (ok) onDeletePlaylist?.();
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-y-auto bg-gradient-to-b from-[#181818] to-[#121212]">
       {/* Header Banner */}
       <div className={`p-8 bg-gradient-to-b ${headerBg} flex items-end gap-6 shadow-md`}>
         <div className="w-44 h-44 bg-[#282828] shadow-2xl rounded-md flex items-center justify-center shrink-0 overflow-hidden">
-          {HeaderIcon ? (
+          {coverImage ? (
+            <img src={coverImage} alt="" className="w-full h-full object-cover" />
+          ) : HeaderIcon ? (
             <HeaderIcon size={70} className="text-white" />
           ) : (
             <Music size={70} className="text-[#a7a7a7]" />
           )}
         </div>
         <div className="flex flex-col gap-2 overflow-hidden">
-          <span className="text-xs uppercase font-bold tracking-wider text-white">Playlist</span>
+          <span className="text-xs uppercase font-bold tracking-wider text-white">{headerLabel}</span>
           <h1 className="text-5xl font-black text-white tracking-tight truncate">{title}</h1>
           <p className="text-sm text-[#b3b3b3]">{subtitle || `${tracks.length} offline songs ready to play`}</p>
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="px-8 py-5 flex items-center justify-between">
+      <div className="px-8 py-5 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <button
             onClick={() => {
               if (filteredTracks.length === 0) return;
-              const isCurrentPlayingInList =
-                currentTrack && filteredTracks.some((t) => (t.filePath || t.id) === (currentTrack.filePath || currentTrack.id));
-              if (isCurrentPlayingInList) {
+              if (listPlaying) {
                 togglePlay();
               } else {
                 playTrack(filteredTracks[0], filteredTracks, 0);
               }
             }}
             disabled={filteredTracks.length === 0}
+            title={listPlaying ? 'Pause' : 'Play all'}
             className="w-14 h-14 rounded-full bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg disabled:opacity-40 disabled:scale-100"
           >
-            {isPlaying &&
-            currentTrack &&
-            filteredTracks.some((t) => (t.filePath || t.id) === (currentTrack.filePath || currentTrack.id)) ? (
+            {listPlaying ? (
               <Pause size={24} fill="currentColor" />
             ) : (
               <Play size={24} fill="currentColor" className="ml-1" />
@@ -100,6 +135,26 @@ export default function TrackList({
             >
               <FolderOpen size={16} />
               <span>Open in Explorer</span>
+            </button>
+          )}
+
+          {onRenamePlaylist && (
+            <button
+              onClick={handleRename}
+              className="flex items-center gap-2 text-sm text-[#b3b3b3] hover:text-white px-3 py-1.5 rounded-full border border-[#3e3e3e] hover:border-white transition-colors"
+            >
+              <Pencil size={15} />
+              <span>Rename</span>
+            </button>
+          )}
+
+          {onDeletePlaylist && (
+            <button
+              onClick={handleDeletePlaylist}
+              className="flex items-center gap-2 text-sm text-[#b3b3b3] hover:text-red-400 px-3 py-1.5 rounded-full border border-[#3e3e3e] hover:border-red-400 transition-colors"
+            >
+              <Trash2 size={15} />
+              <span>Delete playlist</span>
             </button>
           )}
         </div>
@@ -119,7 +174,7 @@ export default function TrackList({
 
       {/* Tracks Table */}
       <div className="px-8 pb-10 flex-1">
-        <div className="grid grid-cols-[30px_4fr_2fr_100px_80px] gap-4 px-4 py-2 border-b border-[#282828] text-xs font-semibold text-[#a7a7a7] uppercase tracking-wider">
+        <div className="grid grid-cols-[30px_4fr_2fr_100px_100px] gap-4 px-4 py-2 border-b border-[#282828] text-xs font-semibold text-[#a7a7a7] uppercase tracking-wider">
           <span>#</span>
           <span>Title</span>
           <span>Artist / Album</span>
@@ -138,17 +193,17 @@ export default function TrackList({
         ) : (
           <div className="flex flex-col mt-2">
             {filteredTracks.map((track, idx) => {
-              const isCurrent =
-                currentTrack && (currentTrack.filePath || currentTrack.id) === (track.filePath || track.id);
-              const isFavorited = favorites.some(
-                (f) => (f.filePath || f.id) === (track.filePath || track.id)
-              );
+              const isCurrent = currentTrack && sameTrack(track, currentTrack);
+              const isFavorited = favorites.some((f) => sameTrack(f, track));
+              const status = downloadStatuses[track.id];
+              const isDownloading = status && status.status === 'downloading';
+              const local = isLocal(track);
 
               return (
                 <div
-                  key={track.filePath || track.id}
+                  key={trackKey(track)}
                   onDoubleClick={() => playTrack(track, filteredTracks, idx)}
-                  className={`grid grid-cols-[30px_4fr_2fr_100px_80px] gap-4 px-4 py-2.5 rounded-md text-sm items-center hover:bg-[#282828]/80 transition-colors group cursor-pointer ${
+                  className={`grid grid-cols-[30px_4fr_2fr_100px_100px] gap-4 px-4 py-2.5 rounded-md text-sm items-center hover:bg-[#282828]/80 transition-colors group cursor-pointer ${
                     isCurrent ? 'bg-[#282828]' : ''
                   }`}
                 >
@@ -195,16 +250,8 @@ export default function TrackList({
                       >
                         {track.title}
                       </span>
-                      <span
-                        onClick={(e) => {
-                          if (onOpenArtistPage && track.artist) {
-                            e.stopPropagation();
-                            onOpenArtistPage(track.artist);
-                          }
-                        }}
-                        className="text-xs text-[#a7a7a7] truncate hover:underline hover:text-white cursor-pointer"
-                      >
-                        {track.artist}
+                      <span className="text-[11px] text-[#727272] truncate">
+                        {!local ? 'Online stream' : 'Offline file'}
                       </span>
                     </div>
                   </div>
@@ -217,7 +264,7 @@ export default function TrackList({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onToggleFavorite(track);
+                        onToggleFavorite?.(track);
                       }}
                       className={`transition-colors ${
                         isFavorited ? 'text-[#1ed760]' : 'text-[#a7a7a7] opacity-0 group-hover:opacity-100 hover:text-white'
@@ -228,53 +275,82 @@ export default function TrackList({
                     <span>{formatDuration(track.duration)}</span>
                   </div>
 
-                  {/* Actions (Delete / Add to playlist) */}
+                  {/* Actions */}
                   <div className="flex items-center justify-end gap-2 text-[#a7a7a7]">
-                    {playlists.length > 0 && onAddToPlaylist && (
-                      <div className="relative">
+                    {/* Reorder — only meaningful in a real, unfiltered list */}
+                    {onMovePlaylistTrack && !filterQuery && (
+                      <>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPlaylistMenuTrack(playlistMenuTrack === track.id ? null : track.id);
+                            onMovePlaylistTrack(idx, idx - 1);
                           }}
-                          title="Add to Playlist"
-                          className="opacity-0 group-hover:opacity-100 hover:text-white transition-opacity p-1"
+                          disabled={idx === 0}
+                          title="Move up"
+                          className="opacity-0 group-hover:opacity-100 hover:text-white disabled:opacity-20 disabled:hover:text-inherit transition-opacity p-1"
                         >
-                          <ListPlus size={16} />
+                          <ChevronUp size={15} />
                         </button>
-
-                        {playlistMenuTrack === track.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute right-0 top-6 w-44 bg-[#282828] border border-[#3e3e3e] rounded-md shadow-2xl py-1 z-30"
-                          >
-                            <span className="px-3 py-1 text-[10px] uppercase font-bold text-[#727272] block">
-                              Add to playlist
-                            </span>
-                            {playlists.map((pl) => (
-                              <button
-                                key={pl.id}
-                                onClick={() => {
-                                  onAddToPlaylist(pl.id, track);
-                                  setPlaylistMenuTrack(null);
-                                }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-white hover:bg-[#3e3e3e] truncate"
-                              >
-                                {pl.name}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMovePlaylistTrack(idx, idx + 1);
+                          }}
+                          disabled={idx === filteredTracks.length - 1}
+                          title="Move down"
+                          className="opacity-0 group-hover:opacity-100 hover:text-white disabled:opacity-20 disabled:hover:text-inherit transition-opacity p-1"
+                        >
+                          <ChevronDown size={15} />
+                        </button>
+                      </>
                     )}
 
-                    {onDeleteTrack && track.filePath && (
+                    {!local && onDownload && !isDownloading && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm(`Delete "${track.title}" from offline storage?`)) {
-                            onDeleteTrack(track.filePath);
-                          }
+                          onDownload(track);
+                        }}
+                        title="Download for offline use"
+                        className="opacity-0 group-hover:opacity-100 hover:text-white transition-opacity p-1"
+                      >
+                        <Download size={15} />
+                      </button>
+                    )}
+
+                    {isDownloading && (
+                      <span className="text-[11px] font-bold text-[#1ed760]">
+                        {Math.round(status.percent || 0)}%
+                      </span>
+                    )}
+
+                    {onAddToPlaylist && !readOnly && (
+                      <PlaylistPickerButton
+                        track={track}
+                        playlists={playlists}
+                        onAddToPlaylist={onAddToPlaylist}
+                        onCreatePlaylist={onCreatePlaylist}
+                      />
+                    )}
+
+                    {onRemoveFromPlaylist && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveFromPlaylist(track);
+                        }}
+                        title="Remove from this playlist"
+                        className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity p-1"
+                      >
+                        <ListX size={15} />
+                      </button>
+                    )}
+
+                    {onDeleteTrack && local && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(track);
                         }}
                         title="Delete from Offline Storage"
                         className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity p-1"

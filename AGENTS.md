@@ -58,6 +58,9 @@ with `await import('music-metadata')` inside the handler. Keep it dynamic — a 
 | `search-music`, `get-artist-page`, `get-song-page` | `yt-search` scraping (30/40/20 results) |
 | `get-local-library` | scans MUSIC_DIR, parses ID3 + embedded art to base64 |
 | `download-track`, `cancel-download`, `download-progress` | yt-dlp child process, progress streamed via `webContents.send` |
+| `resolve-stream` | `yt-dlp -g` → direct audio URL for online playback (3h session cache) |
+| `search-albums` | instant provisional albums, then streams real tags via `album-metadata` events |
+| `refresh-metadata` | re-probes sidecars missing an album so old downloads gain albums |
 | `delete-track`, `open-music-folder` | filesystem |
 | `get-user-data`, `save-user-data` | favorites + playlists JSON |
 
@@ -65,21 +68,42 @@ Add a channel in `main.js` **and** `preload.js`, or the renderer silently gets `
 
 ## Conventions that aren't obvious
 
+- **Track identity is `trackKey()`, not `filePath || id`.** Always compare tracks with
+  `sameTrack(a, b)` from `src/renderer/src/utils/tracks.js`; never inline a key comparison.
+  `trackKey` prefers `ytId` over `filePath` because search results carry a YouTube video id
+  while library tracks carry a filesystem path — comparing those two shapes directly (the old
+  behaviour) silently broke favorites and playlists the moment a track was downloaded.
 - **Filename format is load-bearing.** Downloads write
   `` `${artist} - ${title} [${ytId}].mp3` ``. `isTrackDownloaded()` in `App.jsx` matches on
   `filename.includes(track.id)`. Change the template and already-downloaded files stop being
   detected as downloaded (they get re-downloaded).
-- **Sidecar metadata.** Each download also writes `<mp3>.json` (id/title/artist/thumbnail/seconds).
-  `get-local-library` prefers ID3 but falls back to the sidecar, and `delete-track` removes
-  both. Always delete the pair together.
-- **Track identity** across the app is `filePath || id` — used for favorites, playlists, and
-  the "is this the playing track" checks. Not a real ID scheme; keep it consistent.
+- **Sidecar metadata.** Each download also writes `<mp3>.json` (id/title/artist/thumbnail/seconds/album/year).
+  `get-local-library` prefers ID3 but falls back to the sidecar, surfaces the sidecar's `id`
+  as `ytId`, and `delete-track` removes both. Always delete the pair together.
+  The sidecar is written from the `info.json` yt-dlp emits alongside the audio
+  (`--write-info-json`), so album/artist/year survive even when the extracted ID3
+  album tag is empty. That info file is deleted after being folded into the sidecar —
+  on success, error, *and* cancel — or it shows up as a stray file in the library folder.
+- **Albums are derived, never stored.** `groupAlbums()` in `utils/tracks.js` buckets the
+  library by `artist` + `album` ID3 tags. There is no album table — changing the grouping
+  changes every album page at once. Its sibling `groupSearchResults()` does the inverse for
+  online discovery: it buckets flat search videos by the album tag that arrives *after* the
+  search returns.
 - **All app state lives in `App.jsx`** (library, favorites, playlists, download statuses, view
-  string like `'playlist:123'`). Views are plain props, not routed components — add a view by
-  extending `currentView` + `renderMainView`.
-- Playback is one `new Audio()` in `src/renderer/src/context/AudioContext.jsx`. Its effect
-  depends on `queue, currentIndex, repeatMode, isShuffle`, so listeners re-bind on every queue
-  change. Queue/repeat state is in context; track lists are not.
+  string like `'playlist:123'` / `'album:<key>'`). Views are plain props, not routed
+  components — add a view by extending `currentView` + `renderMainView`.
+- **No native `prompt`/`confirm`/`alert`.** Use `useDialog()` (`DialogContext`) which returns
+  promises: `await dialog.confirm(...)` / `await dialog.prompt(...)` / `dialog.alert(...)`.
+- Playback is one `new Audio()` in `src/renderer/src/context/AudioContext.jsx`. Its listeners
+  are registered once; `handleNextTrack` is reached from the `ended` handler through
+  `handleNextTrackRef`, since the handler is defined after the effect that registers it.
+- **Shuffle is an index permutation, not a random pick per skip.** `shuffleRef` holds a
+  Fisher-Yates ordering of queue indexes, `shufflePosRef` the cursor into it. `Math.random()`
+  per skip repeats tracks — don't reintroduce it. Turning shuffle off clears both refs.
+- **Online playback resolves a URL before playing.** `playTrack` → `setSrcAndPlay` →
+  `window.api.resolveStream(ytId)`. Resolved URLs are IP-bound and expire, so `AudioContext`
+  re-resolves once on a media `error` (guarded by `retryRef`). `isBuffering` covers both the
+  resolve round-trip and network rebuffering.
 
 ## Security posture — don't loosen further
 
@@ -100,6 +124,11 @@ Don't assume these are intentional when you hit them:
 - Bulk download fires **one yt-dlp process per track with no concurrency cap**
   (`ArtistView.jsx` `handleDownloadSelected`), each with `-N 4` fragments. Selecting 40 tracks
   spawns 40 processes × 4 fragments.
-- `prompt()`, `confirm()`, and `alert()` are used for playlist creation, delete confirmation,
-  and download errors (`App.jsx`, `TrackList.jsx`).
+- Online streams depend on YouTube's `bestaudio` URL staying valid; a stale URL surfaces as
+  `playbackError` in the player bar with a "Download instead" fallback, not a crash.
+- **Album metadata only exists for videos on official music channels.** A plain user upload
+  usually returns an empty `album` field, so album search is *progressive*: `search-albums`
+  returns candidates grouped provisionally under the uploader, and `album-metadata` events
+  re-group cards as real tags arrive. Probing 24 videos takes ~40s, so never await it before
+  rendering.
 - `package.json` contains a duplicate `description` key (JSON keeps the last one).
