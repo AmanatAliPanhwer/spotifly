@@ -258,7 +258,10 @@ ipcMain.handle('get-local-library', async () => {
 // 3. Download Music In-App
 const activeDownloads = new Map();
 
-ipcMain.handle('download-track', async (event, track) => {
+const cancelledDownloads = new Set();
+
+ipcMain.handle('download-track', (event, track) => {
+  return new Promise((resolve, reject) => {
   const { id, title, artist, thumbnail, seconds } = track;
   const ytDlp = getYtDlpPath();
 
@@ -312,6 +315,12 @@ ipcMain.handle('download-track', async (event, track) => {
 
     proc.on('close', (code) => {
       activeDownloads.delete(id);
+      // A user-initiated cancel is not a failure: resolve quietly so the
+      // renderer does not raise a spurious "download error" alert.
+      if (cancelledDownloads.delete(id)) {
+        resolve({ success: false, cancelled: true });
+        return;
+      }
       if (code === 0) {
         const expectedMp3 = path.join(MUSIC_DIR, `${baseFilename}.mp3`);
         // Save sidecar metadata for fast instant offline load
@@ -337,17 +346,20 @@ ipcMain.handle('download-track', async (event, track) => {
 
     proc.on('error', (err) => {
       activeDownloads.delete(id);
+      cancelledDownloads.delete(id);
       if (mainWindow) {
         mainWindow.webContents.send('download-progress', { id, percent: 0, status: 'error' });
       }
       reject(err);
     });
   });
+});
 
 // Cancel active download
 ipcMain.handle('cancel-download', (event, id) => {
   if (activeDownloads.has(id)) {
     const proc = activeDownloads.get(id);
+    cancelledDownloads.add(id);
     try {
       proc.kill();
     } catch (_) {}
