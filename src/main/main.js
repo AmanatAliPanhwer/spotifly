@@ -1,17 +1,31 @@
+/**
+ * Spotifly — main process.
+ *
+ * Owns the whole backend: YouTube search, yt-dlp downloads, direct stream URL
+ * resolution, ID3 + sidecar metadata reading, and the favorites/playlists store.
+ * The renderer has no Node access; it reaches these through the channels in
+ * preload.js only. Every `ipcMain.handle` below is one such channel, so adding
+ * a capability means adding it in BOTH files.
+ */
 const { app, BrowserWindow, ipcMain, shell, protocol, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const yts = require('yt-search');
 const { spawn } = require('child_process');
 
-// Determine music storage directory: %USERPROFILE%/Music/Spotifly
+// Downloaded audio lives in a single flat folder: %USERPROFILE%/Music/Spotifly.
+// Flat because the filename template below embeds the YouTube id, which is what
+// makes "is this already downloaded?" a cheap string check in the renderer.
 const MUSIC_DIR = path.join(app.getPath('music'), 'Spotifly');
 if (!fs.existsSync(MUSIC_DIR)) {
   fs.mkdirSync(MUSIC_DIR, { recursive: true });
 }
 
-// Data storage (playlists, favorites, metadata cache)
+// Playlists + favorites, stored in Electron's userData dir (not the music dir,
+// so the user can wipe their library without losing their playlists).
 const DATA_FILE = path.join(app.getPath('userData'), 'spotifly-data.json');
+
+/** Read persisted user data, falling back to an empty store on any error. */
 function loadUserData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
@@ -23,6 +37,7 @@ function loadUserData() {
   return { favorites: [], playlists: [], playHistory: [] };
 }
 
+/** Overwrite the whole user-data file. Callers send the complete object. */
 function saveUserData(data) {
   try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
@@ -31,7 +46,15 @@ function saveUserData(data) {
   }
 }
 
-// yt-dlp path: check project bin, packaged resources, or system
+/**
+ * Locate the yt-dlp binary, in priority order:
+ *   1. packaged resources  — how a released build ships it
+ *   2. repo bin/            — how a dev checkout uses it
+ *   3. bare name            — fall back to whatever is on PATH
+ *
+ * bin/yt-dlp.exe is gitignored, so a fresh clone has no bundled binary and
+ * silently degrades to the PATH lookup. Don't assume step 1 or 2 will hit.
+ */
 function getYtDlpPath() {
   if (process.resourcesPath) {
     const resBin = path.join(process.resourcesPath, 'bin', 'yt-dlp.exe');
@@ -50,6 +73,8 @@ function getYtDlpPath() {
   return 'yt-dlp';
 }
 
+// Held module-wide so IPC handlers can push events (progress, album metadata)
+// back to the single main window.
 let mainWindow = null;
 
 function createWindow() {
