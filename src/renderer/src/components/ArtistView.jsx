@@ -13,6 +13,7 @@ import {
   Play,
   Pause,
   Radio,
+  Shuffle,
 } from 'lucide-react';
 import { PlaylistPickerButton } from './PlaylistPicker';
 import { useAudio } from '../context/AudioContext';
@@ -33,7 +34,7 @@ export default function ArtistView({
   const [tracks, setTracks] = useState([]);
   const [banner, setBanner] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, playShuffled, togglePlay, isShuffle } = useAudio();
 
   useEffect(() => {
     let active = true;
@@ -115,6 +116,20 @@ export default function ArtistView({
       {/* Bulk Download & Selection Action Bar */}
       <div className="px-8 py-4 flex items-center justify-between border-b border-[#242424] bg-[#141414]/90 sticky top-0 z-20 backdrop-blur">
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => playShuffled(tracks)}
+            disabled={tracks.length === 0}
+            title="Shuffle all tracks by this artist"
+            className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all disabled:opacity-40 ${
+              isShuffle
+                ? 'bg-[#1ed760] text-black border-[#1ed760]'
+                : 'bg-[#242424] text-white border-[#3e3e3e] hover:bg-[#333333]'
+            }`}
+          >
+            <Shuffle size={15} />
+            <span>Shuffle</span>
+          </button>
+
           <button
             onClick={selectAll}
             className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#242424] hover:bg-[#333333] text-white border border-[#3e3e3e] transition-colors"

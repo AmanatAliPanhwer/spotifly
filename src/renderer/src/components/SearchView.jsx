@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search as SearchIcon, Download, CheckCircle, Loader2, Music, Sparkles, Zap, XCircle, Play, Pause, Radio, Disc3, Layers } from 'lucide-react';
+import { Search as SearchIcon, Download, CheckCircle, Loader2, Music, Sparkles, Zap, XCircle, Play, Pause, Radio, Disc3, Layers, Shuffle } from 'lucide-react';
 import { PlaylistPickerButton } from './PlaylistPicker';
 import { useAudio } from '../context/AudioContext';
 import { sameTrack, groupSearchResults } from '../utils/tracks';
@@ -34,7 +34,7 @@ export default function SearchView({
   const [enriching, setEnriching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, playShuffled, togglePlay } = useAudio();
   const tokenRef = useRef('');
 
   // Album mode: results appear immediately from yt-search, then each video gets
@@ -248,6 +248,17 @@ export default function SearchView({
                           ) : (
                             <Play size={20} fill="currentColor" className="ml-0.5" />
                           )}
+                        </button>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playShuffled(album.tracks);
+                          }}
+                          title="Shuffle album"
+                          className="absolute bottom-2 right-16 w-11 h-11 rounded-full bg-black/70 text-white backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 hover:scale-105 hover:bg-black transition-all"
+                        >
+                          <Shuffle size={18} />
                         </button>
 
                         {album.provisional && (

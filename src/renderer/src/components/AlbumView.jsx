@@ -10,6 +10,7 @@ import {
   Sparkles,
   Radio,
   Clock,
+  Shuffle,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
 import { PlaylistPickerButton } from './PlaylistPicker';
@@ -28,7 +29,8 @@ export default function AlbumView({
   onAddToPlaylist,
   onCreatePlaylist,
 }) {
-  const { currentTrack, isPlaying, playTrack, togglePlay, isBuffering } = useAudio();
+  const { currentTrack, isPlaying, playTrack, playShuffled, togglePlay, isBuffering, isShuffle } =
+    useAudio();
   const [downloadingAll, setDownloadingAll] = useState(false);
 
   const tracks = album?.tracks || [];
@@ -132,6 +134,21 @@ export default function AlbumView({
           )}
           <span>{albumPlaying ? 'Pause' : 'Play album'}</span>
         </button>
+
+        <button
+          onClick={() => playShuffled(tracks)}
+          disabled={tracks.length === 0}
+          title="Shuffle album"
+          className={`flex items-center gap-2 text-sm font-bold px-5 py-3 rounded-full border transition-all disabled:opacity-40 ${
+            isShuffle
+              ? 'bg-[#1ed760] text-black border-[#1ed760]'
+              : 'text-[#b3b3b3] hover:text-white border-[#3e3e3e] hover:border-white'
+          }`}
+        >
+          <Shuffle size={18} />
+          <span>Shuffle</span>
+        </button>
+
 
         {onDownload && tracks.some((t) => !isLocal(t)) && (
           <button

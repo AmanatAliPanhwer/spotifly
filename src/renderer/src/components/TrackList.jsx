@@ -13,6 +13,7 @@ import {
   ChevronUp,
   ChevronDown,
   Download,
+  Shuffle,
 } from 'lucide-react';
 import { useAudio } from '../context/AudioContext';
 import { PlaylistPickerButton } from './PlaylistPicker';
@@ -44,7 +45,7 @@ export default function TrackList({
   onOpenSongPage,
   readOnly = false,
 }) {
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, playShuffled, togglePlay, isShuffle } = useAudio();
   const dialog = useDialog();
   const [filterQuery, setFilterQuery] = useState('');
 
@@ -126,6 +127,20 @@ export default function TrackList({
             ) : (
               <Play size={24} fill="currentColor" className="ml-1" />
             )}
+          </button>
+
+          <button
+            onClick={() => playShuffled(filteredTracks)}
+            disabled={filteredTracks.length === 0}
+            title="Shuffle play"
+            className={`flex items-center gap-2 text-sm font-bold px-4 py-2.5 rounded-full border transition-all disabled:opacity-40 ${
+              isShuffle
+                ? 'bg-[#1ed760] text-black border-[#1ed760]'
+                : 'text-[#b3b3b3] hover:text-white border-[#3e3e3e] hover:border-white'
+            }`}
+          >
+            <Shuffle size={16} />
+            <span>Shuffle</span>
           </button>
 
           {onOpenFolder && (

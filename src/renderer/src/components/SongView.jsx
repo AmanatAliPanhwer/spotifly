@@ -13,6 +13,7 @@ import {
   Play,
   Pause,
   Radio,
+  Shuffle,
 } from 'lucide-react';
 import { PlaylistPickerButton } from './PlaylistPicker';
 import { useAudio } from '../context/AudioContext';
@@ -32,7 +33,7 @@ export default function SongView({
 }) {
   const [loading, setLoading] = useState(true);
   const [relatedTracks, setRelatedTracks] = useState([]);
-  const { currentTrack, isPlaying, playTrack, togglePlay } = useAudio();
+  const { currentTrack, isPlaying, playTrack, playShuffled, togglePlay, isShuffle } = useAudio();
 
   useEffect(() => {
     let active = true;
@@ -122,7 +123,7 @@ export default function SongView({
       </div>
 
       {/* Main Action Bar for this Song */}
-      <div className="px-8 py-5 flex items-center justify-between border-b border-[#242424] bg-[#161616]/80 backdrop-blur sticky top-0 z-20">
+      <div className="px-8 py-5 flex items-center justify-between gap-4 flex-wrap border-b border-[#242424] bg-[#161616]/80 backdrop-blur sticky top-0 z-20">
         <div className="flex items-center gap-4">
           <button
             onClick={handleToggle}
@@ -183,10 +184,26 @@ export default function SongView({
 
       {/* Recommended / Related Tracks */}
       <div className="px-8 py-6 flex-1">
-        <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          <Sparkles size={20} className="text-[#1ed760]" />
-          <span>Recommended Tracks & Variations</span>
-        </h2>
+        <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Sparkles size={20} className="text-[#1ed760]" />
+            <span>Recommended Tracks & Variations</span>
+          </h2>
+
+          <button
+            onClick={() => playShuffled([track, ...relatedTracks])}
+            disabled={relatedTracks.length === 0}
+            title="Shuffle this song with its recommendations"
+            className={`flex items-center gap-2 text-xs font-bold px-4 py-2 rounded-full border transition-all disabled:opacity-40 ${
+              isShuffle
+                ? 'bg-[#1ed760] text-black border-[#1ed760]'
+                : 'bg-[#242424] text-white border-[#3e3e3e] hover:bg-[#333333]'
+            }`}
+          >
+            <Shuffle size={15} />
+            <span>Shuffle all</span>
+          </button>
+        </div>
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-[#a7a7a7]">

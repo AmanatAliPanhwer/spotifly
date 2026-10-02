@@ -100,6 +100,12 @@ Add a channel in `main.js` **and** `preload.js`, or the renderer silently gets `
 - **Shuffle is an index permutation, not a random pick per skip.** `shuffleRef` holds a
   Fisher-Yates ordering of queue indexes, `shufflePosRef` the cursor into it. `Math.random()`
   per skip repeats tracks — don't reintroduce it. Turning shuffle off clears both refs.
+- **Two ways to start shuffle, don't conflate them.** `toggleShuffle()` (player bar) flips the
+  mode and permutes the *existing* queue around whatever is playing. `playShuffled(list)` (the
+  green **Shuffle** button in each list header) *replaces* the queue with that list and is
+  idempotent — it turns shuffle on rather than flipping it, so double-pressing it never
+  lands you back in natural order. It anchors on the currently playing track when that track
+  is in the list, so a mid-list press continues rather than jumping.
 - **Online playback resolves a URL before playing.** `playTrack` → `setSrcAndPlay` →
   `window.api.resolveStream(ytId)`. Resolved URLs are IP-bound and expire, so `AudioContext`
   re-resolves once on a media `error` (guarded by `retryRef`). `isBuffering` covers both the

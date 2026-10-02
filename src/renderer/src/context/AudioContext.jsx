@@ -284,6 +284,31 @@ export function AudioProvider({ children }) {
     });
   }, [queue, currentIndex, currentTrack]);
 
+  // Start a shuffled playthrough of `trackList` (defaults to the live queue).
+  // Unlike toggleShuffle this is idempotent: it turns shuffle *on* rather than
+  // flipping it, so pressing "Shuffle" twice never lands you back in order.
+  // The anchor is whatever is already playing if it's in this list, so a shuffle
+  // started from a list the user is mid-way through continues from that track.
+  const playShuffled = useCallback(
+    (trackList = null) => {
+      const list = trackList && trackList.length > 0 ? trackList : queue;
+      if (list.length === 0) return;
+
+      const currentKey = currentTrack ? trackKey(currentTrack) : null;
+      const anchor = currentKey ? list.findIndex((t) => trackKey(t) === currentKey) : -1;
+      const start = anchor >= 0 ? anchor : Math.floor(Math.random() * list.length);
+
+      setQueue(list);
+      setCurrentIndex(start);
+      setIsShuffle(true);
+      shuffleRef.current = buildShuffleOrder(list.length, start);
+      shufflePosRef.current = 0;
+      setCurrentTrack(list[start]);
+      setSrcAndPlay(list[start]);
+    },
+    [queue, currentTrack, setSrcAndPlay]
+  );
+
   const toggleRepeat = useCallback(() => {
     setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'));
   }, []);
@@ -304,6 +329,7 @@ export function AudioProvider({ children }) {
         queue,
         currentIndex,
         playTrack,
+        playShuffled,
         togglePlay,
         seek,
         handleNextTrack,
