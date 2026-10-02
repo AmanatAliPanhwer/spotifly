@@ -1,7 +1,7 @@
 {
   "name": "spotifly",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "Offline Music Player with In-App YouTube Search and Downloader",
   "main": "src/main/main.js",
   "scripts": {
     "dev:renderer": "vite",
@@ -51,7 +51,6 @@
       "shortcutName": "Spotifly"
     }
   },
-  "description": "Offline Music Player with In-App YouTube Search and Downloader",
   "keywords": [],
   "author": "Spotifly",
   "license": "ISC",
